@@ -113,7 +113,7 @@ class _DailyCheckInSheetState extends State<DailyCheckInSheet> {
 
 // --- 2. THE RELAPSE ANALYSIS SHEET ---
 class RelapseAnalysisSheet extends StatefulWidget {
-  final VoidCallback onRelapseComplete;
+  final Future<void> Function() onRelapseComplete;
   const RelapseAnalysisSheet({required this.onRelapseComplete, super.key});
 
   @override
@@ -125,10 +125,11 @@ class _RelapseAnalysisSheetState extends State<RelapseAnalysisSheet> {
   String? _selectedTrigger;
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
+  final TextEditingController _otherTriggerController = TextEditingController();
   bool _isSubmitting = false;
 
   final List<String> triggers = [
-    "Stress/Anxiety", "Boredom", "Social Media", "Loneliness", "Insomnia", "Accidental Exposure"
+    "Stress/Anxiety", "Boredom", "Social Media", "Loneliness", "Insomnia", "Accidental Exposure", "Other"
   ];
 
   @override
@@ -174,31 +175,30 @@ class _RelapseAnalysisSheetState extends State<RelapseAnalysisSheet> {
           ),
           const SizedBox(height: 20),
 
-          // 2. LOCATION
-          TextField(
-            controller: _locationController,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: const Color(0xFF222222),
-              labelText: "Where were you?",
-              labelStyle: TextStyle(color: Colors.grey[600]),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          // Custom Trigger Input
+          if (_selectedTrigger == "Other") ...[
+            _buildTextField(
+              controller: _otherTriggerController,
+              label: "Specify Trigger",
+              hint: "What was the specific trigger?",
             ),
+            const SizedBox(height: 20),
+          ],
+
+          // 2. LOCATION
+          _buildTextField(
+            controller: _locationController,
+            label: "Where were you?",
+            hint: "e.g. Home, Office...",
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 20),
 
           // 3. NOTES
-          TextField(
+          _buildTextField(
             controller: _notesController,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: const Color(0xFF222222),
-              labelText: "What happened? (Brief note)",
-              labelStyle: TextStyle(color: Colors.grey[600]),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-            ),
+            label: "What happened?",
+            hint: "Brief note...",
+            maxLines: 3,
           ),
           const SizedBox(height: 20),
 
@@ -211,16 +211,27 @@ class _RelapseAnalysisSheetState extends State<RelapseAnalysisSheet> {
                 backgroundColor: const Color(0xFFFF4B4B), // Red for danger/reset
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
-              onPressed: (_isSubmitting || _selectedTrigger == null) ? null : () async {
+              onPressed: (_isSubmitting || _selectedTrigger == null || (_selectedTrigger == "Other" && _otherTriggerController.text.isEmpty)) ? null : () async {
                 setState(() => _isSubmitting = true);
+                
+                final actualTrigger = _selectedTrigger == "Other" 
+                    ? _otherTriggerController.text 
+                    : _selectedTrigger!;
+
                 await _service.logRelapseDetailed(
-                  trigger: _selectedTrigger!,
+                  trigger: actualTrigger,
                   location: _locationController.text,
                   notes: _notesController.text,
                 );
-                
-                widget.onRelapseComplete(); // Callback to refresh dashboard
-                if (mounted) Navigator.pop(context);
+                // Ensure dashboard re-fetches after DB trigger updates streak
+                await Future.delayed(const Duration(milliseconds: 150));
+                await widget.onRelapseComplete(); // Callback to refresh dashboard
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Streak reset. Starting again."))
+                  );
+                }
               },
               child: _isSubmitting 
                 ? const CircularProgressIndicator(color: Colors.white)
@@ -230,6 +241,41 @@ class _RelapseAnalysisSheetState extends State<RelapseAnalysisSheet> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller, 
+    required String label, 
+    required String hint,
+    int maxLines = 1
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 12, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white),
+          maxLines: maxLines,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFF222222),
+            hintText: hint,
+            hintStyle: TextStyle(color: Colors.grey[700]),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12), 
+              borderSide: BorderSide.none
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12), 
+              borderSide: const BorderSide(color: Color(0xFF333333), width: 1)
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

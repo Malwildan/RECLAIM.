@@ -17,7 +17,8 @@ class PanicModeScreen extends StatefulWidget {
 }
 
 class _PanicModeScreenState extends State<PanicModeScreen> {
-  late PanicMode _currentMode;
+  // State: Mode selection (starts null to show menu)
+  PanicMode? _currentMode;
   final ReclaimService _service = ReclaimService();
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isPlayingAudio = false;
@@ -27,13 +28,6 @@ class _PanicModeScreenState extends State<PanicModeScreen> {
     super.initState();
     // 1. HAPTIC SHOCK: Immediate physical feedback upon opening
     HapticFeedback.heavyImpact();
-    // 2. RANDOMIZE: Pick one of the 4 intervention modes
-    _currentMode = PanicMode.values[Random().nextInt(PanicMode.values.length)];
-    
-    // If audio mode is picked, preload the audio
-    if (_currentMode == PanicMode.audio) {
-      _setupAudio();
-    }
   }
 
   Future<void> _setupAudio() async {
@@ -86,7 +80,9 @@ class _PanicModeScreenState extends State<PanicModeScreen> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
-          child: Column(
+          child: _currentMode == null 
+            ? _buildSelectionMenu() 
+            : Column(
             children: [
               // The main content area changes based on randomized mode
               Expanded(
@@ -116,8 +112,76 @@ class _PanicModeScreenState extends State<PanicModeScreen> {
     );
   }
 
+  Widget _buildSelectionMenu() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text("CHOOSE YOUR WEAPON", 
+          textAlign: TextAlign.center,
+          style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+        const SizedBox(height: 10),
+        const Text("Select an intervention to break the loop.", 
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.grey)),
+        const SizedBox(height: 40),
+        
+        _buildModeButton("BREATHING", "4-7-8 Technique", Icons.air, PanicMode.breathing),
+        const SizedBox(height: 16),
+        _buildModeButton("FLASHCARDS", "Reality check quotes", Icons.style, PanicMode.flashcard),
+        const SizedBox(height: 16),
+        _buildModeButton("AUDIO RESET", "Guided meditation", Icons.headphones, PanicMode.audio),
+        const SizedBox(height: 16),
+        _buildModeButton("VENT JOURNAL", "Write it out", Icons.edit, PanicMode.journal),
+      ],
+    ).animate().fadeIn().slideY(begin: 0.1, end: 0);
+  }
+
+  Widget _buildModeButton(String title, String subtitle, IconData icon, PanicMode mode) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _currentMode = mode;
+        });
+        if (mode == PanicMode.audio) {
+          _setupAudio();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: Colors.red, size: 24),
+            ),
+            const SizedBox(width: 20),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: GoogleFonts.spaceGrotesk(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                Text(subtitle, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+              ],
+            ),
+            const Spacer(),
+            const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildModeContent() {
-    switch (_currentMode) {
+    switch (_currentMode!) {
       case PanicMode.breathing: return const BreathingExerciseWidget();
       case PanicMode.flashcard: return const FlashcardWidget();
       case PanicMode.audio: return _buildAudioPlayerWidget();

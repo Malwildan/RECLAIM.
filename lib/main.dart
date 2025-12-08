@@ -6,16 +6,23 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:async';
 
 import 'reclaim_service.dart';
+import 'utils/level_system.dart';
+import 'screens/milestones_screen.dart';
+import 'screens/journal_history_screen.dart';
+import 'screens/about_screen.dart';
+import 'screens/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
 
   await Supabase.initialize(
-    url: 'https://ljvfxaexorrcsblnzyjp.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqdmZ4YWV4b3JyY3NibG56eWpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwOTA3OTQsImV4cCI6MjA4MDY2Njc5NH0.yvGlZV2DdN_TSHiJZaUXxq0AIxlnpsF1767oZdk3fTg',
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
   runApp(const ReclaimApp());
@@ -54,9 +61,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   
   // Default to 0 until data loads
   Duration currentStreak = Duration.zero; 
-  DateTime? streakStartTime;
+  DateTime? streakStartTime; // stored as UTC
   Timer? _timer;
   bool isLoading = true;
+  String lastLogText = "";
 
   @override
   void initState() {
@@ -70,13 +78,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     
     // 2. Get the real start time from Supabase
     streakStartTime = await _service.getStreakStart();
+    // 2b. Get the last log text (journal or relapse)
+    lastLogText = await _service.getLastLogText();
     
     setState(() {
       isLoading = false;
       _updateStreakDuration(); // Calculate initial duration
     });
 
-    // 3. Start the ticker to update UI every second
+    // 3. Start or restart the ticker to update UI every second
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
       if (streakStartTime != null) {
@@ -89,10 +100,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // Helper to do the math
   void _updateStreakDuration() {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     if (streakStartTime != null) {
-      final start = streakStartTime!.toLocal();
-      final diff = now.difference(start);
+      // Compare in UTC to avoid timezone drift
+      final startUtc = streakStartTime!;
+      final diff = now.difference(startUtc);
       currentStreak = diff.isNegative ? Duration.zero : diff;
     }
   }
@@ -163,9 +175,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: Color(0xFFB4F8C8))),
-      );
+      return const SplashScreen();
     }
 
     return Scaffold(
@@ -179,9 +189,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("RECLAIM.",
-                      style: GoogleFonts.spaceGrotesk(
-                          fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: -1)),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation, secondaryAnimation) => const AboutScreen(),
+                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                            return FadeTransition(opacity: animation, child: child);
+                          },
+                        ),
+                      );
+                    },
+                    child: Text("RECLAIM.",
+                        style: GoogleFonts.spaceGrotesk(
+                            fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: -1)),
+                  ),
                       
                   // THE RELAPSE BUTTON
                   GestureDetector(
@@ -192,12 +215,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         isScrollControlled: true, // Allows keyboard to push sheet up
                         backgroundColor: Colors.transparent,
                         builder: (context) => RelapseAnalysisSheet(
-                          onRelapseComplete: () {
-                            // Refresh the dashboard data after reset
-                            _initData();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Counter reset. Learn from this."))
-                            );
+                          onRelapseComplete: () async {
+                            // Wait for database write to complete
+                            await Future.delayed(const Duration(milliseconds: 800));
+                            // Force full refresh of streak data
+                            if (mounted) {
+                              await _initData();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  backgroundColor: Color(0xFFFF4B4B),
+                                  content: Text("Counter reset. Starting fresh now.", 
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
+                                )
+                              );
+                            }
                           },
                         ),
                       );
@@ -275,12 +306,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   // LEFT CARD: MOOD (Keep as is, or simplify)
                   Expanded(
-                    child: _buildBentoCard(
-                      title: "LAST LOG",
-                      content: "Anxious", // In a real app, fetch this from DB
-                      icon: Icons.bubble_chart,
-                      color: const Color(0xFF1A1A1A),
-                      textColor: Colors.white,
+                    child: GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const JournalHistoryScreen()),
+                        );
+                      },
+                      child: _buildBentoCard(
+                        title: "LAST LOG",
+                        content: lastLogText.isEmpty ? "No logs yet" : lastLogText,
+                        icon: Icons.bubble_chart,
+                        color: const Color(0xFF1A1A1A),
+                        textColor: Colors.white,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -292,72 +331,84 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         final int days = currentStreak.inDays;
                         final currentLvl = LevelSystem.getCurrentLevel(days);
                         final nextLvl = LevelSystem.getNextLevel(days);
-                        final double progress = LevelSystem.getProgressToNextLevel(days);
+                        final double progress = LevelSystem.getProgressToNextLevelPrecise(currentStreak);
 
-                        return Container(
-                          height: 100,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1A1A1A),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: Colors.white.withOpacity(0.05))
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              // Text Info
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Icon(Icons.shield_outlined, color: Colors.grey, size: 20),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text("LEVEL", 
-                                        style: TextStyle(color: Colors.grey[600], fontSize: 10, fontWeight: FontWeight.bold)),
-                                      Text(currentLvl['title'], 
-                                        style: TextStyle(
-                                          color: currentLvl['color'], 
-                                          fontSize: 16, 
-                                          fontWeight: FontWeight.w900,
-                                          shadows: [Shadow(color: (currentLvl['color'] as Color).withOpacity(0.5), blurRadius: 10)]
-                                        )),
-                                    ],
-                                  )
-                                ],
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => MilestonesScreen(currentStreakDays: days),
                               ),
-                              
-                              // Circular XP Bar
-                              Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  // Background Circle
+                            );
+                          },
+                          child: Container(
+                            height: 100,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A1A1A),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(color: Colors.white.withOpacity(0.05))
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Text Info
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Icon(Icons.shield_outlined, color: Colors.grey, size: 20),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text("CURRENT LEVEL", 
+                                          style: TextStyle(color: Colors.grey[600], fontSize: 10, fontWeight: FontWeight.bold)),
+                                        Text(currentLvl['title'], 
+                                          style: TextStyle(
+                                            color: currentLvl['color'], 
+                                            fontSize: 16, 
+                                            fontWeight: FontWeight.w900,
+                                            shadows: [Shadow(color: (currentLvl['color'] as Color).withOpacity(0.5), blurRadius: 10)]
+                                          )),
+                                      ],
+                                    )
+                                  ],
+                                ),
+                                
+                                // Circular XP Bar
+                                Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    // Background Circle (Grey - reveals as days pass)
                                   SizedBox(
                                     width: 50, height: 50,
                                     child: CircularProgressIndicator(
                                       value: 1.0,
                                       strokeWidth: 5,
-                                      color: Colors.white.withOpacity(0.1),
+                                      color: Colors.grey.withOpacity(0.5),
                                     ),
                                   ),
-                                  // Progress Circle
+                                  // Progress Circle (Green - shrinks as you get closer)
                                   SizedBox(
                                     width: 50, height: 50,
                                     child: CircularProgressIndicator(
-                                      value: progress,
+                                      value: (1.0 - progress).clamp(0.0, 1.0),
                                       strokeWidth: 5,
                                       backgroundColor: Colors.transparent,
-                                      color: currentLvl['color'],
+                                      color: const Color(0xFFB4F8C8),
                                       strokeCap: StrokeCap.round,
                                     ),
                                   ),
                                   // Days left text in center
                                   Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
                                       Text("${(nextLvl['days'] as int) - days}", 
                                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
+                                      const Text("DAYS", 
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 6, color: Colors.grey)),
                                       const Text("LEFT", 
                                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 6, color: Colors.grey)),
                                     ],
@@ -366,6 +417,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               )
                             ],
                           ),
+                        ),
                         );
                       }
                     ),
@@ -553,42 +605,4 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-}
-
-class LevelSystem {
-  // The thresholds for leveling up
-  static final List<Map<String, dynamic>> levels = [
-    {'days': 0, 'title': 'GLITCH', 'color': Color(0xFF666666)},      // Grey
-    {'days': 3, 'title': 'NOVICE', 'color': Color(0xFFFFFFFF)},      // White
-    {'days': 7, 'title': 'APPRENTICE', 'color': Color(0xFFB4F8C8)},  // Mint
-    {'days': 14, 'title': 'ADEPT', 'color': Color(0xFF64FFDA)},      // Teal
-    {'days': 30, 'title': 'VANGUARD', 'color': Color(0xFF448AFF)},   // Blue
-    {'days': 60, 'title': 'TITAN', 'color': Color(0xFFAA00FF)},      // Purple
-    {'days': 90, 'title': 'GOD MODE', 'color': Color(0xFFFFD700)},   // Gold
-  ];
-
-  static Map<String, dynamic> getCurrentLevel(int streakDays) {
-    // Find the highest level the user has achieved
-    return levels.lastWhere((lvl) => streakDays >= lvl['days'], 
-        orElse: () => levels[0]);
-  }
-
-  static Map<String, dynamic> getNextLevel(int streakDays) {
-    // Find the first level that is strictly greater than current days
-    return levels.firstWhere((lvl) => lvl['days'] > streakDays, 
-        orElse: () => {'days': 9999, 'title': 'MAXED OUT'});
-  }
-
-  static double getProgressToNextLevel(int streakDays) {
-    final current = getCurrentLevel(streakDays);
-    final next = getNextLevel(streakDays);
-    
-    if (next['days'] == 9999) return 1.0; // Max level
-
-    // Math: (Current Streak - Level Start) / (Next Level Start - Level Start)
-    int daysIntoLevel = streakDays - (current['days'] as int);
-    int levelDuration = (next['days'] as int) - (current['days'] as int);
-    
-    return daysIntoLevel / levelDuration;
-  }
 }
