@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-ios:
-    name: v0.1.0 Build
+    name: .ipa build
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
