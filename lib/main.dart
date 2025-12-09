@@ -15,6 +15,7 @@ import 'screens/milestones_screen.dart';
 import 'screens/journal_history_screen.dart';
 import 'screens/about_screen.dart';
 import 'screens/splash_screen.dart';
+import 'utils/top_snack_bar.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +41,9 @@ class ReclaimApp extends StatelessWidget {
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF050505), // Pitch black
         useMaterial3: true,
-        textTheme: GoogleFonts.spaceGroteskTextTheme(ThemeData.dark().textTheme),
+        textTheme: GoogleFonts.spaceGroteskTextTheme(
+          ThemeData.dark().textTheme,
+        ),
       ),
       home: const DashboardScreen(),
     );
@@ -54,17 +57,16 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-
-
 class _DashboardScreenState extends State<DashboardScreen> {
   final ReclaimService _service = ReclaimService();
-  
+
   // Default to 0 until data loads
-  Duration currentStreak = Duration.zero; 
+  Duration currentStreak = Duration.zero;
   DateTime? streakStartTime; // stored as UTC
   Timer? _timer;
   bool isLoading = true;
   String lastLogText = "";
+  bool hasCheckedInToday = false;
 
   @override
   void initState() {
@@ -75,12 +77,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _initData() async {
     // 1. Log them in (Anonymously for now)
     await _service.ensureLoggedIn();
-    
+
     // 2. Get the real start time from Supabase
     streakStartTime = await _service.getStreakStart();
     // 2b. Get the last log text (journal or relapse)
     lastLogText = await _service.getLastLogText();
-    
+    // 2c. Check if already logged today
+    hasCheckedInToday = await _service.hasLoggedToday();
+
+    // Force a 2-second delay for the splash screen
+    await Future.delayed(const Duration(seconds: 2));
+
     setState(() {
       isLoading = false;
       _updateStreakDuration(); // Calculate initial duration
@@ -149,20 +156,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(title,
-                      style: TextStyle(
-                        color: Colors.grey[500],
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      )),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: Colors.grey[500],
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(content,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      content,
                       style: TextStyle(
                         color: textColor,
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
-                      )),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -194,39 +208,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Navigator.push(
                         context,
                         PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) => const AboutScreen(),
-                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                            return FadeTransition(opacity: animation, child: child);
-                          },
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const AboutScreen(),
+                          transitionsBuilder:
+                              (context, animation, secondaryAnimation, child) {
+                                return FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                );
+                              },
                         ),
                       );
                     },
-                    child: Text("RECLAIM.",
-                        style: GoogleFonts.spaceGrotesk(
-                            fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: -1)),
+                    child: Text(
+                      "RECLAIM.",
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -1,
+                      ),
+                    ),
                   ),
-                      
+
                   // THE RELAPSE BUTTON
                   GestureDetector(
                     onTap: () {
                       // Show the Relapse Analysis Sheet
                       showModalBottomSheet(
                         context: context,
-                        isScrollControlled: true, // Allows keyboard to push sheet up
+                        isScrollControlled:
+                            true, // Allows keyboard to push sheet up
                         backgroundColor: Colors.transparent,
                         builder: (context) => RelapseAnalysisSheet(
                           onRelapseComplete: () async {
                             // Wait for database write to complete
-                            await Future.delayed(const Duration(milliseconds: 800));
+                            await Future.delayed(
+                              const Duration(milliseconds: 800),
+                            );
                             // Force full refresh of streak data
                             if (mounted) {
                               await _initData();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  backgroundColor: Color(0xFFFF4B4B),
-                                  content: Text("Counter reset. Starting fresh now.", 
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))
-                                )
+                              showTopSnackBar(
+                                context,
+                                "Counter reset. Starting fresh now.",
+                                backgroundColor: const Color(0xFFFF4B4B),
+                                icon: Icons.refresh,
                               );
                             }
                           },
@@ -234,73 +261,140 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       );
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF222222),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.red.withOpacity(0.3))
+                        border: Border.all(color: Colors.red.withOpacity(0.3)),
                       ),
-                      child: const Text("I Relapsed", style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        "I Relapsed",
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  )
+                  ),
                 ],
               ),
               const SizedBox(height: 30),
 
               // STREAK COUNTER (Same design, real data)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFB4F8C8),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("CURRENT STREAK",
-                        style: TextStyle(
-                            color: Colors.black.withOpacity(0.6),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 10),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
+              Builder(
+                builder: (context) {
+                  final currentLvl = LevelSystem.getCurrentLevel(currentStreak.inDays);
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFB4F8C8),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(
-                          "${currentStreak.inDays}",
-                          style: const TextStyle(
-                              color: Colors.black,
-                              fontSize: 60,
-                              height: 1,
-                              fontWeight: FontWeight.bold),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "CURRENT STREAK",
+                                style: TextStyle(
+                                  color: Colors.black.withOpacity(0.6),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: [
+                                    Text(
+                                      "${currentStreak.inDays}",
+                                      style: const TextStyle(
+                                        color: Colors.black,
+                                        fontSize: 60,
+                                        height: 1,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    const Text(
+                                      "DAYS",
+                                      style: TextStyle(
+                                        color: Colors.black,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              // Monospace Timer for precision
+                              Text(
+                                "${(currentStreak.inHours % 24).toString().padLeft(2, '0')} : "
+                                "${(currentStreak.inMinutes % 60).toString().padLeft(2, '0')} : "
+                                "${(currentStreak.inSeconds % 60).toString().padLeft(2, '0')}",
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                  fontFamily: 'Courier',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(width: 5),
-                        const Text("DAYS",
-                            style: TextStyle(
-                                color: Colors.black,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold)),
+                        // Level Emoji
+                        Padding(
+                          padding: const EdgeInsets.only(right: 16),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                "MY LEVEL",
+                                style: TextStyle(
+                                  color: Colors.black.withOpacity(0.6),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                currentLvl['emoji'] ?? '🤡',
+                                style: const TextStyle(fontSize: 50),
+                              ),
+                              Text(
+                                currentLvl['title'] ?? 'CLOWN',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
-                    // Monospace Timer for precision
-                    Text(
-                      "${(currentStreak.inHours % 24).toString().padLeft(2, '0')} : "
-                      "${(currentStreak.inMinutes % 60).toString().padLeft(2, '0')} : "
-                      "${(currentStreak.inSeconds % 60).toString().padLeft(2, '0')}",
-                      style: const TextStyle(
-                          color: Colors.black,
-                          fontFamily: 'Courier',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
+                  );
+                }
               ).animate().fadeIn().slideY(begin: 0.2, end: 0),
 
               const SizedBox(height: 16),
-              
+
               // 3. The Bento Grid (Mood & Leveling System)
               Row(
                 children: [
@@ -310,12 +404,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const JournalHistoryScreen()),
+                          MaterialPageRoute(
+                            builder: (context) => const JournalHistoryScreen(),
+                          ),
                         );
                       },
                       child: _buildBentoCard(
                         title: "LAST LOG",
-                        content: lastLogText.isEmpty ? "No logs yet" : lastLogText,
+                        content: lastLogText.isEmpty
+                            ? "No logs yet"
+                            : lastLogText,
                         icon: Icons.bubble_chart,
                         color: const Color(0xFF1A1A1A),
                         textColor: Colors.white,
@@ -323,22 +421,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  
+
                   // RIGHT CARD: LEVEL SYSTEM (Dynamic)
                   Expanded(
                     child: Builder(
                       builder: (context) {
                         final int days = currentStreak.inDays;
-                        final currentLvl = LevelSystem.getCurrentLevel(days);
                         final nextLvl = LevelSystem.getNextLevel(days);
-                        final double progress = LevelSystem.getProgressToNextLevelPrecise(currentStreak);
+                        final double progress =
+                            LevelSystem.getProgressToNextLevelPrecise(
+                              currentStreak,
+                            );
 
                         return GestureDetector(
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => MilestonesScreen(currentStreakDays: days),
+                                builder: (context) =>
+                                    MilestonesScreen(currentStreakDays: days),
                               ),
                             );
                           },
@@ -348,78 +449,134 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFF1A1A1A),
                               borderRadius: BorderRadius.circular(24),
-                              border: Border.all(color: Colors.white.withOpacity(0.05))
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.05),
+                              ),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 // Text Info
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Icon(Icons.shield_outlined, color: Colors.grey, size: 20),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text("CURRENT LEVEL", 
-                                          style: TextStyle(color: Colors.grey[600], fontSize: 10, fontWeight: FontWeight.bold)),
-                                        Text(currentLvl['title'], 
-                                          style: TextStyle(
-                                            color: currentLvl['color'], 
-                                            fontSize: 16, 
-                                            fontWeight: FontWeight.w900,
-                                            shadows: [Shadow(color: (currentLvl['color'] as Color).withOpacity(0.5), blurRadius: 10)]
-                                          )),
-                                      ],
-                                    )
-                                  ],
-                                ),
-                                
-                                // Circular XP Bar
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Icon(
+                                        Icons.shield_outlined,
+                                        color: Colors.grey,
+                                        size: 20,
+                                      ),
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              "NEXT LEVEL",
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            Text(
+                                              nextLvl['title'],
+                                              style: TextStyle(
+                                                color: nextLvl['color'],
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w900,
+                                                shadows: [
+                                                  Shadow(
+                                                    color:
+                                                        (nextLvl['color']
+                                                                as Color)
+                                                            .withOpacity(0.5),
+                                                    blurRadius: 10,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),                                // Circular XP Bar
                                 Stack(
                                   alignment: Alignment.center,
                                   children: [
                                     // Background Circle (Grey - reveals as days pass)
-                                  SizedBox(
-                                    width: 50, height: 50,
-                                    child: CircularProgressIndicator(
-                                      value: 1.0,
-                                      strokeWidth: 5,
-                                      color: Colors.grey.withOpacity(0.5),
+                                    SizedBox(
+                                      width: 50,
+                                      height: 50,
+                                      child: CircularProgressIndicator(
+                                        value: 1.0,
+                                        strokeWidth: 5,
+                                        color: Colors.grey.withOpacity(0.5),
+                                      ),
                                     ),
-                                  ),
-                                  // Progress Circle (Green - shrinks as you get closer)
-                                  SizedBox(
-                                    width: 50, height: 50,
-                                    child: CircularProgressIndicator(
-                                      value: (1.0 - progress).clamp(0.0, 1.0),
-                                      strokeWidth: 5,
-                                      backgroundColor: Colors.transparent,
-                                      color: const Color(0xFFB4F8C8),
-                                      strokeCap: StrokeCap.round,
+                                    // Progress Circle (Green - shrinks as you get closer)
+                                    SizedBox(
+                                      width: 50,
+                                      height: 50,
+                                      child: CircularProgressIndicator(
+                                        value: (1.0 - progress).clamp(0.0, 1.0),
+                                        strokeWidth: 5,
+                                        backgroundColor: Colors.transparent,
+                                        color: const Color(0xFFB4F8C8),
+                                        strokeCap: StrokeCap.round,
+                                      ),
                                     ),
-                                  ),
-                                  // Days left text in center
-                                  Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      Text("${(nextLvl['days'] as int) - days}", 
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)),
-                                      const Text("DAYS", 
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 6, color: Colors.grey)),
-                                      const Text("LEFT", 
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 6, color: Colors.grey)),
-                                    ],
-                                  )
-                                ],
-                              )
-                            ],
+                                    // Days left text in center
+                                    SizedBox(
+                                      width: 36,
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              "${(nextLvl['days'] as int) - days}",
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            const Text(
+                                              "DAYS",
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 6,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                            const Text(
+                                              "LEFT",
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 6,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
                         );
-                      }
+                      },
                     ),
                   ),
                 ],
@@ -431,16 +588,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const StatsScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const StatsScreen(),
+                    ),
                   );
                 },
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 20,
+                  ),
                   decoration: BoxDecoration(
                     // A subtle gradient to make it distinct from the check-in card
                     gradient: LinearGradient(
-                      colors: [const Color(0xFF1A1A1A), const Color(0xFF111111)],
+                      colors: [
+                        const Color(0xFF1A1A1A),
+                        const Color(0xFF111111),
+                      ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -456,24 +621,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           color: const Color(0xFF222222),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.insights, color: Color(0xFFB4F8C8), size: 24),
+                        child: const Icon(
+                          Icons.insights,
+                          color: Color(0xFFB4F8C8),
+                          size: 24,
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text("DATA ANALYTICS", 
+                          Text(
+                            "DATA ANALYTICS",
                             style: GoogleFonts.spaceGrotesk(
-                              fontSize: 14, 
-                              fontWeight: FontWeight.bold, 
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
                               color: Colors.white,
-                              letterSpacing: 1
-                            )),
-                          Text("View your trigger patterns", 
-                            style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                              letterSpacing: 1,
+                            ),
+                          ),
+                          Text(
+                            "View your trigger patterns",
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
                       ),
-                      
+
                       const Spacer(),
 
                       // Right: A mini "Fake Chart" visual for aesthetic
@@ -492,7 +668,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 14),
+                      const Icon(
+                        Icons.arrow_forward_ios,
+                        color: Colors.grey,
+                        size: 14,
+                      ),
                     ],
                   ),
                 ).animate().fadeIn().slideY(begin: 0.2, end: 0, delay: 300.ms),
@@ -501,89 +681,125 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 16),
               // THE CHECK-IN CARD (Clickable)
               GestureDetector(
-                onTap: () {
-                  showModalBottomSheet(
+                onTap: hasCheckedInToday ? null : () async {
+                  final result = await showModalBottomSheet(
                     context: context,
+                    isScrollControlled: true,
                     backgroundColor: Colors.transparent,
                     builder: (context) => const DailyCheckInSheet(),
                   );
+
+                  if (result == true) {
+                    await _initData();
+                  }
                 },
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFF333333)),
+                    border: Border.all(color: hasCheckedInToday ? const Color(0xFFB4F8C8).withOpacity(0.3) : const Color(0xFF333333)),
                     borderRadius: BorderRadius.circular(24),
+                    color: hasCheckedInToday ? const Color(0xFFB4F8C8).withOpacity(0.05) : null,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Column(
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text("Daily Check-in",
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          Text("Log your mood & triggers.",
-                              style: TextStyle(color: Colors.grey, fontSize: 12)),
+                          Text(
+                            hasCheckedInToday ? "Check-in Complete" : "Daily Check-in",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: hasCheckedInToday ? const Color(0xFFB4F8C8) : Colors.white,
+                            ),
+                          ),
+                          Text(
+                            hasCheckedInToday ? "See you tomorrow." : "Log your mood & triggers.",
+                            style: TextStyle(
+                              color: hasCheckedInToday ? const Color(0xFFB4F8C8).withOpacity(0.7) : Colors.grey, 
+                              fontSize: 12
+                            ),
+                          ),
                         ],
                       ),
                       Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
+                        decoration: BoxDecoration(
+                          color: hasCheckedInToday ? const Color(0xFFB4F8C8) : Colors.white,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.edit, color: Colors.black, size: 16),
-                      )
+                        child: Icon(
+                          hasCheckedInToday ? Icons.check : Icons.edit,
+                          color: Colors.black,
+                          size: 16,
+                        ),
+                      ),
                     ],
                   ),
                 ).animate().fadeIn().slideY(begin: 0.2, end: 0, delay: 200.ms),
               ),
 
               // ... [Your Daily Check-in Card is above here] ...
-
               const SizedBox(height: 16),
 
               // NEW: ANALYTICS TEASER CARD
-              
-              // ... [The Spacer() and Panic Button are below here] ...
 
+              // ... [The Spacer() and Panic Button are below here] ...
               const Spacer(),
 
               // PANIC BUTTON (Real Logic Added)
               GestureDetector(
                 onTap: () {
-                  Navigator.of(context).push(MaterialPageRoute(fullscreenDialog: true, builder: (context) => PanicModeScreen()));
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      fullscreenDialog: true,
+                      builder: (context) => PanicModeScreen(),
+                    ),
+                  );
                 },
-                child: Container(
-                  width: double.infinity,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF4B4B),
-                    borderRadius: BorderRadius.circular(100),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFFF4B4B).withOpacity(0.4),
-                        blurRadius: 20,
-                        spreadRadius: 2,
-                      )
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.bolt, color: Colors.white, size: 30),
-                      const SizedBox(width: 10),
-                      Text("PANIC BUTTON",
-                          style: GoogleFonts.spaceGrotesk(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1)),
-                    ],
-                  ),
-                ).animate(onPlay: (controller) => controller.repeat(reverse: true))
-                 .scaleXY(begin: 1.0, end: 1.02, duration: 1000.ms),
+                child:
+                    Container(
+                          width: double.infinity,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF4B4B),
+                            borderRadius: BorderRadius.circular(100),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFF4B4B).withOpacity(0.4),
+                                blurRadius: 20,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.bolt,
+                                color: Colors.white,
+                                size: 30,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                "PANIC BUTTON",
+                                style: GoogleFonts.spaceGrotesk(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                        .animate(
+                          onPlay: (controller) =>
+                              controller.repeat(reverse: true),
+                        )
+                        .scaleXY(begin: 1.0, end: 1.02, duration: 1000.ms),
               ),
               const SizedBox(height: 10),
             ],
@@ -604,5 +820,4 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-
 }

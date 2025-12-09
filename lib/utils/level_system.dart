@@ -3,16 +3,16 @@ import 'package:flutter/material.dart';
 class LevelSystem {
   // The thresholds for leveling up
   static final List<Map<String, dynamic>> levels = [
-    {'days': 0, 'title': 'CLOWN', 'color': Color(0xFFFF2659)},      // Red
-    {'days': 1, 'title': 'NOOB', 'color': Color(0xFF9E9E9E)},       // Grey
-    {'days': 3, 'title': 'BEGINNER', 'color': Color(0xFFFFFFFF)},   // White
-    {'days': 7, 'title': 'MID', 'color': Color(0xFFB4F8C8)},        // Mint
-    {'days': 14, 'title': 'ADVANCED', 'color': Color(0xFF64FFDA)},  // Teal
-    {'days': 30, 'title': 'SIGMA', 'color': Color(0xFF448AFF)},     // Blue
-    {'days': 45, 'title': 'CHAD', 'color': Color(0xFF7C4DFF)},      // Indigo
-    {'days': 60, 'title': 'ABSOLUTE CHAD', 'color': Color(0xFFAA00FF)}, // Purple
-    {'days': 120, 'title': 'ALPHA', 'color': Color(0xFFFF4081)},    // Pink
-    {'days': 365, 'title': 'GOD MODE', 'color': Color(0xFFFFD700)}, // Gold
+    {'days': 0, 'title': 'CLOWN', 'color': const Color(0xFFFF2659), 'emoji': '🤡'},      // Red
+    {'days': 1, 'title': 'NOOB', 'color': const Color.fromARGB(255, 99, 54, 54), 'emoji': '👶'},       // Grey
+    {'days': 3, 'title': 'BEGINNER', 'color': const Color.fromARGB(255, 69, 4, 4), 'emoji': '🌱'},   // White
+    {'days': 7, 'title': 'MID', 'color': const Color.fromARGB(255, 25, 146, 25), 'emoji': '😐'},        // Mint
+    {'days': 14, 'title': 'ADVANCED', 'color': const Color.fromARGB(255, 37, 234, 241), 'emoji': '🧠'},  // Teal
+    {'days': 30, 'title': 'SIGMA', 'color': const Color(0xFF448AFF), 'emoji': '🗿'},     // Blue
+    {'days': 45, 'title': 'CHAD', 'color': const Color.fromARGB(255, 157, 47, 99), 'emoji': '🦍'},      // Indigo
+    {'days': 60, 'title': 'ABSOLUTE CHAD', 'color': const Color(0xFFAA00FF), 'emoji': '👑'}, // Purple
+    {'days': 120, 'title': 'ALPHA', 'color': const Color.fromARGB(255, 196, 9, 93), 'emoji': '🐺'},    // Pink
+    {'days': 365, 'title': 'GOD MODE', 'color': const Color(0xFFFFD700), 'emoji': '⚡'}, // Gold
   ];
 
   static Map<String, dynamic> getCurrentLevel(int streakDays) {

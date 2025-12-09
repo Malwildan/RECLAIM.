@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'reclaim_service.dart';
+import 'utils/top_snack_bar.dart';
 
 // --- 1. THE MOOD CHECK-IN SHEET ---
 class DailyCheckInSheet extends StatefulWidget {
@@ -22,90 +23,144 @@ class _DailyCheckInSheetState extends State<DailyCheckInSheet> {
     {'label': 'Meh', 'emoji': '😐', 'val': 2, 'color': Color(0xFF666666)},
     {'label': 'Okay', 'emoji': '🌊', 'val': 3, 'color': Color(0xFF888888)},
     {'label': 'Good', 'emoji': '🔋', 'val': 4, 'color': Color(0xFFB4F8C8)},
-    {'label': 'God Mode', 'emoji': '⚡', 'val': 5, 'color': Color(0xFFB4F8C8)},
+    {'label': 'Energetic', 'emoji': '⚡', 'val': 5, 'color': Color(0xFFB4F8C8)},
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: Color(0xFF111111),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(width: 40, height: 4, color: Colors.grey[800]),
-          ),
-          const SizedBox(height: 20),
-          Text("VIBE CHECK",
-              style: GoogleFonts.spaceGrotesk(
-                  fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white)),
-          const SizedBox(height: 20),
-          
-          // MOOD SELECTOR
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: moods.map((m) {
-              bool isSelected = _selectedMood == m['val'];
-              return GestureDetector(
-                onTap: () => setState(() => _selectedMood = m['val']),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isSelected ? m['color'] : const Color(0xFF222222),
-                    borderRadius: BorderRadius.circular(16),
-                    border: isSelected ? Border.all(color: Colors.white, width: 2) : null,
-                  ),
-                  child: Text(m['emoji'], style: const TextStyle(fontSize: 24)),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Container(
+        padding: EdgeInsets.only(
+          left: 24, 
+          right: 24, 
+          top: 24, 
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24
+        ),
+        decoration: const BoxDecoration(
+          color: Color(0xFF111111),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(width: 40, height: 4, color: Colors.grey[800]),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                "VIBE CHECK",
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
                 ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 20),
-          
-          // NOTE INPUT
-          TextField(
-            controller: _noteController,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: const Color(0xFF222222),
-              hintText: "Anything on your mind?",
-              hintStyle: TextStyle(color: Colors.grey[600]),
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-            ),
-            maxLines: 3,
-          ),
-          const SizedBox(height: 20),
+              ),
+              const SizedBox(height: 20),
 
-          // SUBMIT BUTTON
-          SizedBox(
-            width: double.infinity,
-            height: 55,
-            child: ElevatedButton(
+              // MOOD SELECTOR
+              Row(
+                children: moods.map((m) {
+                  bool isSelected = _selectedMood == m['val'];
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _selectedMood = m['val']),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.symmetric(horizontal: 6),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isSelected ? m['color'] : const Color(0xFF222222),
+                          borderRadius: BorderRadius.circular(16),
+                          border: isSelected
+                              ? Border.all(color: Colors.white, width: 2)
+                              : null,
+                        ),
+                        child: Column(
+                          children: [
+                            Text(m['emoji'], style: const TextStyle(fontSize: 24)),
+                            const SizedBox(height: 4),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                m['label'],
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected
+                                      ? ((m['val'] as int) > 3
+                                          ? Colors.black
+                                          : Colors.white)
+                                      : Colors.grey,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+
+              // NOTE INPUT
+              TextField(
+                controller: _noteController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFF222222),
+                  hintText: "Anything on your mind?",
+                  hintStyle: TextStyle(color: Colors.grey[600]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 20),
+
+              // SUBMIT BUTTON
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFB4F8C8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
-              onPressed: _isSubmitting ? null : () async {
-                setState(() => _isSubmitting = true);
-                await _service.logDailyCheckIn(_selectedMood, _noteController.text);
-                if (mounted) Navigator.pop(context);
-              },
-              child: _isSubmitting 
-                ? const CircularProgressIndicator(color: Colors.black)
-                : Text("LOG IT", style: GoogleFonts.spaceGrotesk(
-                    fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
+              onPressed: _isSubmitting
+                  ? null
+                  : () async {
+                      setState(() => _isSubmitting = true);
+                      await _service.logDailyCheckIn(
+                        _selectedMood,
+                        _noteController.text,
+                      );
+                      if (mounted) Navigator.pop(context, true);
+                    },
+              child: _isSubmitting
+                  ? const CircularProgressIndicator(color: Colors.black)
+                  : Text(
+                      "LOG IT",
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
             ),
           ),
           const SizedBox(height: 20), // Bottom padding for keyboard
         ],
+          ),
+        ),
       ),
     );
   }
@@ -129,33 +184,54 @@ class _RelapseAnalysisSheetState extends State<RelapseAnalysisSheet> {
   bool _isSubmitting = false;
 
   final List<String> triggers = [
-    "Stress/Anxiety", "Boredom", "Social Media", "Loneliness", "Insomnia", "Accidental Exposure", "Other"
+    "Stress/Anxiety",
+    "Boredom",
+    "Social Media",
+    "Loneliness",
+    "Insomnia",
+    "Accidental Exposure",
+    "Other",
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        left: 24, right: 24, top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24 // Handle keyboard
-      ),
-      decoration: const BoxDecoration(
-        color: Color(0xFF111111),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-           Text("RESET ANALYSIS",
-              style: GoogleFonts.spaceGrotesk(
-                  fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFFFF4B4B))),
-          const Text("Be honest. Data beats addiction.",
-              style: TextStyle(color: Colors.grey, fontSize: 12)),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Container(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24, // Handle keyboard
+        ),
+        decoration: const BoxDecoration(
+          color: Color(0xFF111111),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+          Text(
+            "RESET ANALYSIS",
+            style: GoogleFonts.spaceGrotesk(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFFFF4B4B),
+            ),
+          ),
+          const Text(
+            "Be honest. Data beats addiction.",
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          ),
           const SizedBox(height: 20),
 
           // 1. TRIGGER SELECTION (Chips)
-          const Text("What triggered it?", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          const Text(
+            "What triggered it?",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -165,11 +241,17 @@ class _RelapseAnalysisSheetState extends State<RelapseAnalysisSheet> {
               return ChoiceChip(
                 label: Text(trigger),
                 selected: isSelected,
-                onSelected: (val) => setState(() => _selectedTrigger = val ? trigger : null),
+                onSelected: (val) =>
+                    setState(() => _selectedTrigger = val ? trigger : null),
                 backgroundColor: const Color(0xFF222222),
                 selectedColor: const Color(0xFFFF4B4B),
-                labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide.none),
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : Colors.grey,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide.none,
+                ),
               );
             }).toList(),
           ),
@@ -208,52 +290,81 @@ class _RelapseAnalysisSheetState extends State<RelapseAnalysisSheet> {
             height: 55,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF4B4B), // Red for danger/reset
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                backgroundColor: const Color(
+                  0xFFFF4B4B,
+                ), // Red for danger/reset
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
-              onPressed: (_isSubmitting || _selectedTrigger == null || (_selectedTrigger == "Other" && _otherTriggerController.text.isEmpty)) ? null : () async {
-                setState(() => _isSubmitting = true);
-                
-                final actualTrigger = _selectedTrigger == "Other" 
-                    ? _otherTriggerController.text 
-                    : _selectedTrigger!;
+              onPressed:
+                  (_isSubmitting ||
+                      _selectedTrigger == null ||
+                      (_selectedTrigger == "Other" &&
+                          _otherTriggerController.text.isEmpty))
+                  ? null
+                  : () async {
+                      setState(() => _isSubmitting = true);
 
-                await _service.logRelapseDetailed(
-                  trigger: actualTrigger,
-                  location: _locationController.text,
-                  notes: _notesController.text,
-                );
-                // Ensure dashboard re-fetches after DB trigger updates streak
-                await Future.delayed(const Duration(milliseconds: 150));
-                await widget.onRelapseComplete(); // Callback to refresh dashboard
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Streak reset. Starting again."))
-                  );
-                }
-              },
-              child: _isSubmitting 
-                ? const CircularProgressIndicator(color: Colors.white)
-                : Text("RESET COUNTER", style: GoogleFonts.spaceGrotesk(
-                    fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                      final actualTrigger = _selectedTrigger == "Other"
+                          ? _otherTriggerController.text
+                          : _selectedTrigger!;
+
+                      await _service.logRelapseDetailed(
+                        trigger: actualTrigger,
+                        location: _locationController.text,
+                        notes: _notesController.text,
+                      );
+                      // Ensure dashboard re-fetches after DB trigger updates streak
+                      await Future.delayed(const Duration(milliseconds: 150));
+                      await widget
+                          .onRelapseComplete(); // Callback to refresh dashboard
+                      if (mounted) {
+                        Navigator.pop(context);
+                        showTopSnackBar(
+                          context,
+                          "Streak reset. Starting again.",
+                          backgroundColor: const Color(0xFFFF4B4B),
+                          icon: Icons.refresh,
+                        );
+                      }
+                    },
+              child: _isSubmitting
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : Text(
+                      "RESET COUNTER",
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
             ),
           ),
         ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildTextField({
-    required TextEditingController controller, 
-    required String label, 
+    required TextEditingController controller,
+    required String label,
     required String hint,
-    int maxLines = 1
+    int maxLines = 1,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 12, fontWeight: FontWeight.bold)),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey[400],
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
@@ -264,14 +375,17 @@ class _RelapseAnalysisSheetState extends State<RelapseAnalysisSheet> {
             fillColor: const Color(0xFF222222),
             hintText: hint,
             hintStyle: TextStyle(color: Colors.grey[700]),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12), 
-              borderSide: BorderSide.none
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12), 
-              borderSide: const BorderSide(color: Color(0xFF333333), width: 1)
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF333333), width: 1),
             ),
           ),
         ),

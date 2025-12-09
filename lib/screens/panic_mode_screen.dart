@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:audioplayers/audioplayers.dart' as audio;
 import 'dart:async';
 import 'dart:math';
+import 'dart:io' show Platform; // Import Platform
+import 'package:flutter/foundation.dart' show kIsWeb; // Import kIsWeb
 import '../reclaim_service.dart';
+import '../utils/top_snack_bar.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
-enum PanicMode { breathing, flashcard, audio, journal }
+enum PanicMode { breathing, flashcard, audio, journal, video }
 
 class PanicModeScreen extends StatefulWidget {
   const PanicModeScreen({super.key});
@@ -20,7 +24,7 @@ class _PanicModeScreenState extends State<PanicModeScreen> {
   // State: Mode selection (starts null to show menu)
   PanicMode? _currentMode;
   final ReclaimService _service = ReclaimService();
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  final audio.AudioPlayer _audioPlayer = audio.AudioPlayer();
   bool _isPlayingAudio = false;
 
   @override
@@ -32,10 +36,10 @@ class _PanicModeScreenState extends State<PanicModeScreen> {
 
   Future<void> _setupAudio() async {
      // Ensure you have added 'assets/audio/meditation_1.mp3' to pubspec
-     await _audioPlayer.setSource(AssetSource('audio/meditation_1.mp3'));
+     await _audioPlayer.setSource(audio.AssetSource('audio/meditation_1.mp3'));
      _audioPlayer.onPlayerStateChanged.listen((state) {
        if (mounted) {
-         setState(() => _isPlayingAudio = state == PlayerState.playing);
+         setState(() => _isPlayingAudio = state == audio.PlayerState.playing);
        }
      });
   }
@@ -53,11 +57,11 @@ class _PanicModeScreenState extends State<PanicModeScreen> {
     _service.logPanic(wasSuccessful: true);
     // Close screen
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: Color(0xFFB4F8C8),
-        content: Text("You won this round. Good job.", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold))
-      )
+    showTopSnackBar(
+      context,
+      "You won this round. Good job.",
+      backgroundColor: const Color(0xFFB4F8C8),
+      icon: Icons.check_circle,
     );
   }
 
@@ -131,6 +135,8 @@ class _PanicModeScreenState extends State<PanicModeScreen> {
         const SizedBox(height: 16),
         _buildModeButton("AUDIO RESET", "Guided meditation", Icons.headphones, PanicMode.audio),
         const SizedBox(height: 16),
+        _buildModeButton("VIDEO RESET", "Watch motivation", Icons.play_circle, PanicMode.video),
+        const SizedBox(height: 16),
         _buildModeButton("VENT JOURNAL", "Write it out", Icons.edit, PanicMode.journal),
       ],
     ).animate().fadeIn().slideY(begin: 0.1, end: 0);
@@ -186,6 +192,7 @@ class _PanicModeScreenState extends State<PanicModeScreen> {
       case PanicMode.flashcard: return const FlashcardWidget();
       case PanicMode.audio: return _buildAudioPlayerWidget();
       case PanicMode.journal: return const PanicJournalWidget();
+      case PanicMode.video: return const VideoPlayerWidget();
     }
   }
 
@@ -411,5 +418,125 @@ class _PanicJournalWidgetState extends State<PanicJournalWidget> {
         ),
       ],
     ).animate().fadeIn().slideY(begin: 0.1, end: 0);
+  }
+}
+
+// --- VIDEO PLAYER WIDGET ---
+class VideoPlayerWidget extends StatefulWidget {
+  const VideoPlayerWidget({super.key});
+
+  @override
+  State<VideoPlayerWidget> createState() => _VideoPlayerWidgetState();
+}
+
+class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
+  final ReclaimService _service = ReclaimService();
+  YoutubePlayerController? _controller;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _initVideo();
+  }
+
+  Future<void> _initVideo() async {
+    // Skip initialization on unsupported platforms
+    if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    // 1. Get a curated ID from Supabase
+    final videoId = await _service.getRandomVideoId();
+    
+    if (videoId == null) {
+      if (mounted) setState(() => _error = "No videos found.");
+      return;
+    }
+
+    // 2. Initialize the Controller
+    _controller = YoutubePlayerController(
+      initialVideoId: videoId,
+      flags: const YoutubePlayerFlags(
+        autoPlay: true,
+        mute: false,
+        hideControls: true,    // Hides the seek bar to force them to watch
+        hideThumbnail: true,
+        disableDragSeek: true, // Prevent skipping ahead
+      ),
+    );
+
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Check for unsupported platforms (Windows/Mac/Linux)
+    if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.videocam_off, size: 50, color: Colors.grey),
+            const SizedBox(height: 20),
+            Text(
+              "Video mode is only available on Mobile.",
+              style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFFB4F8C8))
+      );
+    }
+
+    if (_error != null) {
+      return Center(child: Text(_error!, style: const TextStyle(color: Colors.red)));
+    }
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text("WATCH THIS.", 
+          style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+        const SizedBox(height: 10),
+        const Text("Don't close your eyes.", style: TextStyle(color: Colors.grey)),
+        const SizedBox(height: 30),
+        
+        // THE PLAYER
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFB4F8C8), width: 2),
+              boxShadow: [
+                 BoxShadow(color: const Color(0xFFB4F8C8).withOpacity(0.2), blurRadius: 20)
+              ]
+            ),
+            child: YoutubePlayer(
+              controller: _controller!,
+              showVideoProgressIndicator: true,
+              progressIndicatorColor: const Color(0xFFB4F8C8),
+              progressColors: const ProgressBarColors(
+                playedColor: Color(0xFFB4F8C8),
+                handleColor: Color(0xFFB4F8C8),
+              ),
+            ),
+          ),
+        ),
+      ],
+    ).animate().fadeIn().scale();
   }
 }

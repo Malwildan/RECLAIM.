@@ -18,34 +18,28 @@ class SplashScreen extends StatelessWidget {
               children: [
                 // Glitch Layer 1 (Red - Left Offset)
                 _buildGlitchText(const Color(0xFFFF0000))
-                    .animate(onPlay: (c) => c.repeat(reverse: true))
+                    .animate()
+                    .hide()
+                    .then(delay: 1500.ms)
+                    .show()
                     .move(begin: const Offset(-3, 0), end: const Offset(-6, 0), duration: 100.ms)
-                    .fadeIn(duration: 50.ms)
-                    .then(delay: 2000.ms) // Wait
-                    .fadeOut(duration: 50.ms) // Glitch out
-                    .then(delay: 50.ms)
-                    .fadeIn(duration: 50.ms) // Glitch in
-                    .then(delay: 100.ms)
                     .fadeOut(duration: 50.ms)
                     .then(delay: 50.ms)
                     .fadeIn(duration: 50.ms)
-                    .then(delay: 200.ms)
+                    .then(delay: 100.ms)
                     .fadeOut(duration: 50.ms),
 
                 // Glitch Layer 2 (Cyan - Right Offset)
                 _buildGlitchText(const Color(0xFF00FFFF))
-                    .animate(onPlay: (c) => c.repeat(reverse: true))
+                    .animate()
+                    .hide()
+                    .then(delay: 1550.ms)
+                    .show()
                     .move(begin: const Offset(3, 0), end: const Offset(6, 0), duration: 100.ms)
-                    .fadeIn(duration: 50.ms)
-                    .then(delay: 2100.ms) // Slightly desynced
                     .fadeOut(duration: 50.ms)
                     .then(delay: 50.ms)
                     .fadeIn(duration: 50.ms)
                     .then(delay: 100.ms)
-                    .fadeOut(duration: 50.ms)
-                    .then(delay: 50.ms)
-                    .fadeIn(duration: 50.ms)
-                    .then(delay: 200.ms)
                     .fadeOut(duration: 50.ms),
 
                 // Main Text
@@ -57,21 +51,23 @@ class SplashScreen extends StatelessWidget {
                     color: Colors.white,
                     letterSpacing: -2,
                   ),
-                ).animate(onPlay: (c) => c.repeat())
-                 .shimmer(duration: 2500.ms, color: const Color(0xFFB4F8C8).withOpacity(0.5))
-                 .shake(hz: 0.2, rotation: 0.03) // Slower shake, slightly more rotation
+                ).animate()
+                 .fadeIn(duration: 800.ms, curve: Curves.easeOut) // Gentle Entry
+                 .then(delay: 700.ms) // Wait
+                 // IMPACT EXIT: Zoom in violently + Shake
+                 .scale(begin: const Offset(1, 1), end: const Offset(15, 15), duration: 500.ms, curve: Curves.easeInExpo)
+                 .shake(hz: 4, rotation: 0.05, duration: 500.ms)
+                 .fadeOut(duration: 300.ms, curve: Curves.easeIn),
               ],
-            ).animate() // Entrance Impact
-             .scale(begin: const Offset(3, 3), end: const Offset(1, 1), duration: 400.ms, curve: Curves.easeOutExpo)
-             .fadeIn(duration: 50.ms)
-             .shake(hz: 4, curve: Curves.easeInOut, duration: 400.ms, rotation: 0.05),
+            ),
           ),
 
-          // Flash Overlay
+          // Flash Overlay (At the end)
           IgnorePointer(
-            child: Container(color: Colors.white.withOpacity(0.1))
-                .animate()
-                .fadeOut(duration: 500.ms, curve: Curves.easeOut),
+            child: Container(color: Colors.white)
+                .animate(delay: 1800.ms)
+                .fadeIn(duration: 50.ms)
+                .fadeOut(duration: 200.ms),
           ),
         ],
       ),
