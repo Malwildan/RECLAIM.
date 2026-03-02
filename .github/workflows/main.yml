@@ -1,0 +1,94 @@
+name: Build Flutter APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch: # Allow manual triggers
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up Java (required by Android SDK)
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # 3. Set up Flutter
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.0" # Pin your desired Flutter version
+          channel: stable
+          cache: true
+
+      # 4. Install dependencies
+      - name: Install dependencies
+        run: flutter pub get
+
+      # 5. Run tests (optional — remove if you don't have tests)
+      - name: Run tests
+        run: flutter test
+
+      # 6. Build release APK
+      - name: Build APK
+        run: flutter build apk --release
+
+      # 7. (Optional) Build split APKs per ABI for smaller file sizes
+      # - name: Build split APKs
+      #   run: flutter build apk --release --split-per-abi
+
+      # 8. Upload APK as artifact
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          # If using split APKs, use this path instead:
+          # path: build/app/outputs/flutter-apk/*.apk
+          retention-days: 30
+
+  # ─────────────────────────────────────────────
+  # OPTIONAL: Sign the APK for Play Store release
+  # Uncomment and configure if you need a signed APK
+  # ─────────────────────────────────────────────
+  # sign-and-release:
+  #   name: Sign APK
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main'
+  #
+  #   steps:
+  #     - name: Download APK artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: release-apk
+  #
+  #     - name: Sign APK
+  #       uses: r0adkll/sign-android-release@v1
+  #       with:
+  #         releaseDirectory: .
+  #         signingKeyBase64: ${{ secrets.SIGNING_KEY }}        # base64-encoded .jks keystore
+  #         alias: ${{ secrets.KEY_ALIAS }}
+  #         keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+  #         keyPassword: ${{ secrets.KEY_PASSWORD }}
+  #
+  #     - name: Upload signed APK
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: signed-release-apk
+  #         path: "*.apk"
